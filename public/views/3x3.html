@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Rubik's Cube</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link rel="stylesheet" href="../css/3x3.css">
+</head>
+
+<body>
+
+    <div class="info">
+        <h1 class="text-xl font-bold mb-2">3D Rubik's Cube</h1>
+        <p class="text-sm opacity-80">Drag to rotate view</p>
+        <p class="text-sm opacity-80">Keys: T, D, L, R, F, B</p>
+        <p class="text-sm opacity-80">Shift + Key for CCW</p>
+    </div>
+
+    <div class="controls">
+        <button onclick="rotateFace('T')">T</button>
+        <button onclick="rotateFace('D')">D</button>
+        <button onclick="rotateFace('L')">L</button>
+        <button onclick="rotateFace('R')">R</button>
+        <button onclick="rotateFace('F')">F</button>
+        <button onclick="rotateFace('B')">B</button>
+        <button onclick="scramble()" class="bg-blue-600 border-none ml-4">Scramble</button>
+    </div>
+
+</body>
+    <script src="../js/rubics.js"></script>
+</html>
