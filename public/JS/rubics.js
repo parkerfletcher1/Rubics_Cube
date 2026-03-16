@@ -13,7 +13,7 @@ let scene, camera, renderer, cubeGroup;
             inside: 0x111111 // Black
         };
 
-        const pieceSize = 0.94;
+        const pieceSize = 0.95;
         const pieces = [];
 
         function init() {
@@ -29,7 +29,6 @@ let scene, camera, renderer, cubeGroup;
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            renderer.setClearColor(0x1a1a1a, 1);
             document.body.appendChild(renderer.domElement);
 
             // Lighting
@@ -73,9 +72,6 @@ let scene, camera, renderer, cubeGroup;
         }
 
         function createCube() {
-            // Clear pieces array and group if re-initializing
-            pieces.length = 0;
-            
             for (let x = -1; x <= 1; x++) {
                 for (let y = -1; y <= 1; y++) {
                     for (let z = -1; z <= 1; z++) {
@@ -88,14 +84,11 @@ let scene, camera, renderer, cubeGroup;
                             new THREE.MeshLambertMaterial({ color: z === -1 ? COLORS.back : COLORS.inside })
                         ];
 
-                        const geometry = new THREE.BoxGeometry(pieceSize, pieceSize, pieceSize);
-                        const piece = new THREE.Mesh(geometry, materials);
+                        const piece = new THREE.Mesh(new THREE.BoxGeometry(pieceSize, pieceSize, pieceSize), materials);
                         piece.position.set(x, y, z);
                         
-                        // Add Black Outlines
-                        const edges = new THREE.EdgesGeometry(geometry);
-                        const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 }));
-                        piece.add(line);
+                        const edges = new THREE.EdgesGeometry(piece.geometry);
+                        piece.add(new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000 })));
 
                         pieces.push(piece);
                         cubeGroup.add(piece);
@@ -109,58 +102,44 @@ let scene, camera, renderer, cubeGroup;
             isRotating = true;
 
             const pivot = new THREE.Group();
-            scene.add(pivot);
+            cubeGroup.add(pivot); // Child of cubeGroup keeps math simple
 
-            const rotationAxis = {
-                'T': new THREE.Vector3(0, 1, 0),
-                'D': new THREE.Vector3(0, -1, 0),
-                'L': new THREE.Vector3(-1, 0, 0),
-                'R': new THREE.Vector3(1, 0, 0),
-                'F': new THREE.Vector3(0, 0, 1),
-                'B': new THREE.Vector3(0, 0, -1)
-            }[face];
+            const axisMap = {
+                'T': new THREE.Vector3(0, 1, 0), 'D': new THREE.Vector3(0, -1, 0),
+                'L': new THREE.Vector3(-1, 0, 0), 'R': new THREE.Vector3(1, 0, 0),
+                'F': new THREE.Vector3(0, 0, 1), 'B': new THREE.Vector3(0, 0, -1)
+            };
 
             const condition = {
-                'T': (p) => p.position.y > 0.5,
-                'D': (p) => p.position.y < -0.5,
-                'L': (p) => p.position.x < -0.5,
-                'R': (p) => p.position.x > 0.5,
-                'F': (p) => p.position.z > 0.5,
-                'B': (p) => p.position.z < -0.5
+                'T': p => p.position.y > 0.5, 'D': p => p.position.y < -0.5,
+                'L': p => p.position.x < -0.5, 'R': p => p.position.x > 0.5,
+                'F': p => p.position.z > 0.5, 'B': p => p.position.z < -0.5
             }[face];
 
             const facePieces = pieces.filter(condition);
-            facePieces.forEach(p => {
-                cubeGroup.remove(p);
-                pivot.add(p);
-            });
+            facePieces.forEach(p => pivot.attach(p));
 
-            const targetRotation = (clockwise ? -Math.PI / 2 : Math.PI / 2);
-            const duration = 250; 
+            const targetRotation = (clockwise ? -1 : 1) * Math.PI / 2;
+            const duration = 250;
             const startTime = performance.now();
 
             function animateRotation(now) {
                 const elapsed = now - startTime;
                 const progress = Math.min(elapsed / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 3);
                 
-                // Reset rotation and apply incremental for smooth animation
-                pivot.rotation.set(0, 0, 0);
-                pivot.rotateOnAxis(rotationAxis, progress * targetRotation);
+                pivot.rotation.set(0,0,0);
+                pivot.rotateOnAxis(axisMap[face], eased * targetRotation);
 
                 if (progress < 1) {
                     requestAnimationFrame(animateRotation);
                 } else {
-                    pivot.updateMatrixWorld();
                     facePieces.forEach(p => {
-                        p.applyMatrix4(pivot.matrixWorld);
-                        // Sanitize positions to prevent floating point drift
-                        p.position.x = Math.round(p.position.x);
-                        p.position.y = Math.round(p.position.y);
-                        p.position.z = Math.round(p.position.z);
-                        pivot.remove(p);
-                        cubeGroup.add(p);
+                        cubeGroup.attach(p);
+                        // Hard reset to perfect integers to prevent alignment drift
+                        p.position.set(Math.round(p.position.x), Math.round(p.position.y), Math.round(p.position.z));
                     });
-                    scene.remove(pivot);
+                    cubeGroup.remove(pivot);
                     isRotating = false;
                 }
             }
@@ -168,11 +147,11 @@ let scene, camera, renderer, cubeGroup;
         }
 
         function scramble() {
-            const moves = ['T', 'D', 'L', 'R', 'F', 'B'];
             let count = 0;
+            const moves = ['T', 'D', 'L', 'R', 'F', 'B'];
             const interval = setInterval(() => {
                 if (!isRotating) {
-                    rotateFace(moves[Math.floor(Math.random() * moves.length)], Math.random() > 0.5);
+                    rotateFace(moves[Math.floor(Math.random() * 6)], Math.random() > 0.5);
                     count++;
                 }
                 if (count >= 15) clearInterval(interval);
@@ -181,13 +160,13 @@ let scene, camera, renderer, cubeGroup;
 
         function handleMouseMove(e) {
             if (!isDragging) return;
-            const deltaMove = { x: e.clientX - previousMousePosition.x, y: e.clientY - previousMousePosition.y };
+            const dx = (e.clientX - previousMousePosition.x) * 0.01;
+            const dy = (e.clientY - previousMousePosition.y) * 0.01;
             
-            const rotationQuaternion = new THREE.Quaternion().setFromEuler(
-                new THREE.Euler(toRadians(deltaMove.y * 0.5), toRadians(deltaMove.x * 0.5), 0, 'XYZ')
-            );
+            const qX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), dy);
+            const qY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), dx);
+            cubeGroup.quaternion.premultiply(qY).multiply(qX);
             
-            cubeGroup.quaternion.multiplyQuaternions(rotationQuaternion, cubeGroup.quaternion);
             previousMousePosition = { x: e.clientX, y: e.clientY };
         }
 
@@ -195,8 +174,6 @@ let scene, camera, renderer, cubeGroup;
             const key = e.key.toUpperCase();
             if (['T', 'D', 'L', 'R', 'F', 'B'].includes(key)) rotateFace(key, !e.shiftKey);
         }
-
-        function toRadians(angle) { return angle * (Math.PI / 180); }
 
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
@@ -209,5 +186,4 @@ let scene, camera, renderer, cubeGroup;
             renderer.render(scene, camera);
         }
 
-        // Use window.onload to ensure script runs after DOM is ready
-        window.addEventListener('load', init);
+        window.onload = init;
